@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рой — студия генеративной графики</title>
+<meta name="description" content="60 000 частиц, которые собираются в формы по мере прокрутки. Three.js, GLSL-шейдеры, bloom.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tektur:wght@500;800;900&family=Onest:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#06051A;     /* глубокий космос с фиолетом */
+  --mist:#C9C6E8;     /* туман — основной текст */
+  --dim:#7C78A8;
+  --coral:#FF6B59;
+  --cyan:#5ACCFF;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--void)}
+body{color:var(--mist);font:300 18px/1.6 "Onest",system-ui,sans-serif;overflow-x:hidden}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:4px}
+canvas#gl{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:0}
+.veil{position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse at 50% 120%,rgba(90,204,255,.10),transparent 60%)}
+
+header{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:26px clamp(20px,4vw,48px);mix-blend-mode:difference}
+.mark{font:900 22px "Tektur";letter-spacing:.02em;color:#fff;text-decoration:none}
+.count{font:500 14px "Tektur";color:#fff;letter-spacing:.08em}
+.count b{display:inline-block;min-width:1.2em;text-align:right}
+
+main{position:relative;z-index:2}
+section{position:relative;min-height:100vh;display:flex;align-items:center;padding:0 clamp(20px,6vw,96px)}
+section.right{justify-content:flex-end}
+.txt{max-width:30rem}
+h1{font:900 clamp(72px,17vw,260px)/.82 "Tektur";letter-spacing:-.03em;color:#fff;margin-bottom:28px}
+h1 .l{display:inline-block;opacity:0;transform:translateY(.25em);filter:blur(12px);transition:opacity 1.1s cubic-bezier(.2,.7,.2,1),transform 1.1s cubic-bezier(.2,.7,.2,1),filter 1.1s}
+.ready h1 .l{opacity:1;transform:none;filter:none}
+.ready h1 .l:nth-child(2){transition-delay:.12s}.ready h1 .l:nth-child(3){transition-delay:.24s}
+h2{font:800 clamp(40px,6vw,84px)/.95 "Tektur";letter-spacing:-.02em;color:#fff;margin-bottom:22px}
+p.big{font-size:clamp(18px,1.6vw,22px)}
+p.small{color:var(--dim);font-size:15px;margin-top:18px}
+.scroll-cue{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);font:500 13px "Tektur";letter-spacing:.12em;color:var(--dim);display:flex;flex-direction:column;align-items:center;gap:10px}
+.scroll-cue i{width:1px;height:46px;background:linear-gradient(var(--dim),transparent);animation:cue 2.2s ease-in-out infinite}
+@keyframes cue{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+.stats{display:flex;gap:36px;margin-top:30px}
+.stats div{font:800 38px/1 "Tektur";color:#fff}
+.stats small{display:block;font:400 14px "Onest";color:var(--dim);margin-top:6px}
+.cta{display:inline-flex;align-items:center;gap:14px;margin-top:34px;padding:20px 30px;border-radius:999px;background:#fff;color:var(--void);font:800 17px "Tektur";text-decoration:none;transition:transform .25s,box-shadow .25s}
+.cta:hover{transform:translateY(-2px);box-shadow:0 0 0 6px rgba(255,107,89,.25),0 0 60px rgba(255,107,89,.45)}
+section.last{flex-direction:column;justify-content:flex-end;align-items:center;text-align:center;padding-bottom:12vh}
+footer{position:relative;z-index:2;text-align:center;color:var(--dim);font-size:13px;padding:0 20px 28px}
+@media (max-width:700px){
+  section,section.right{justify-content:flex-start;align-items:flex-end;padding-bottom:14vh}
+  .stats{gap:22px}.stats div{font-size:28px}
+}
+@media (prefers-reduced-motion:reduce){.scroll-cue i{animation:none}h1 .l{transition:none}}
+</style>
+<script type="importmap">
+{"imports":{
+  "three":"https://esm.sh/three@0.160.0",
+  "three/addons/":"https://esm.sh/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<canvas id="gl" aria-hidden="true"></canvas>
+<div class="veil"></div>
+<header>
+  <a class="mark" href="#top">РОЙ</a>
+  <div class="count" aria-hidden="true"><b id="cur">1</b> / 4</div>
+</header>
+
+<main id="top">
+  <section>
+    <div class="txt">
+      <h1 aria-label="Рой"><span class="l">Р</span><span class="l">О</span><span class="l">Й</span></h1>
+      <p class="big">Студия генеративной графики. Делаем сайты, которые двигаются, дышат и отвечают на каждое движение мыши.</p>
+    </div>
+    <div class="scroll-cue">листайте<i></i></div>
+  </section>
+
+  <section class="right">
+    <div class="txt">
+      <h2>Из хаоса — форма</h2>
+      <p class="big">Каждая точка на экране — отдельная частица со своим маршрутом. Шейдер на видеокарте пересчитывает их 60 раз в секунду.</p>
+      <p class="small">Наведите курсор на частицы — они расступятся.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="txt">
+      <h2>Целая галактика в браузере</h2>
+      <p class="big">Без видео и без тяжёлых картинок: вся сцена — это математика и несколько килобайт кода.</p>
+      <div class="stats">
+        <div><span id="pc">60 000</span><small>частиц</small></div>
+        <div>60<small>кадров в секунду</small></div>
+        <div>0<small>картинок</small></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="last">
+    <h2>Давайте сделаем ваш</h2>
+    <p class="big">Расскажите об идее — соберём из неё что-нибудь живое.</p>
+    <a class="cta" href="mailto:hello@example.com">Написать студии</a>
+  </section>
+</main>
+<footer>Учебный проект. Three.js, GLSL, UnrealBloom. Сделано с помощью Claude Code.</footer>
+
+<script>
+/* заголовок появляется сразу после загрузки шрифта, не дожидаясь 3D */
+const show=()=>document.body.classList.add('ready');
+document.fonts.ready.then(show); setTimeout(show,1500);
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+
+const mobile = matchMedia('(max-width: 700px)').matches;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const N = mobile ? 26000 : 60000;
+document.getElementById('pc').textContent = N.toLocaleString('ru-RU');
+
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:false, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+camera.position.set(0, 0, 10);
+
+/* ---------- формы ---------- */
+const rnd = Math.random, TAU = Math.PI*2;
+const gauss = () => { let u=0,v=0; while(!u)u=rnd(); while(!v)v=rnd(); return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v); };
+
+function sphere(){
+  const a = new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    const y = 1 - 2*(i+.5)/N, r = Math.sqrt(1-y*y), th = i*2.399963;
+    const R = 2.0*(rnd()<.85 ? 1+gauss()*.02 : .3+rnd()*.6);
+    a.set([Math.cos(th)*r*R, y*R, Math.sin(th)*r*R], i*3);
+  }
+  return a;
+}
+function knot(){
+  const a = new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    const t = rnd()*TAU, p=2, q=3, s=.85;
+    const r = 2 + Math.cos(q*t);
+    const x = r*Math.cos(p*t)*s, y = r*Math.sin(p*t)*s, z = -Math.sin(q*t)*s;
+    const rr = .32*Math.sqrt(rnd()), ang = rnd()*TAU;
+    a.set([x+Math.cos(ang)*rr, y+Math.sin(ang)*rr, z+gauss()*.12], i*3);
+  }
+  return a;
+}
+function galaxy(){
+  const a = new Float32Array(N*3), arms = 3;
+  for(let i=0;i<N;i++){
+    const r = Math.pow(rnd(), .7)*3.8;
+    const arm = (i%arms)/arms*TAU;
+    const spin = r*1.25;
+    const spread = .45/(r*.6+.4);
+    const x = Math.cos(arm+spin)*r + gauss()*spread*.6;
+    const z = Math.sin(arm+spin)*r + gauss()*spread*.6;
+    const y = gauss()*.18*(1-r/5);
+    a.set([x, y, z], i*3);
+  }
+  return a;
+}
+async function word(text){
+  try{ await document.fonts.load('900 200px Tektur'); }catch{}
+  const c = document.createElement('canvas'), W=1200, H=360;
+  c.width=W; c.height=H;
+  const g = c.getContext('2d');
+  g.fillStyle='#fff'; g.textAlign='center'; g.textBaseline='middle';
+  g.font='900 250px Tektur, sans-serif';
+  g.fillText(text, W/2, H/2+10);
+  const data = g.getImageData(0,0,W,H).data, pts=[];
+  for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2) if(data[(y*W+x)*4+3]>128) pts.push(x,y);
+  const a = new Float32Array(N*3), scale = 9/W;
+  for(let i=0;i<N;i++){
+    const k = (Math.floor(rnd()*pts.length/2))*2;
+    a.set([(pts[k]-W/2+rnd()*2)*scale, -(pts[k+1]-H/2+rnd()*2)*scale, gauss()*.08], i*3);
+  }
+  return a;
+}
+function scatter(){
+  const a = new Float32Array(N*3);
+  for(let i=0;i<N;i++){ const d=new THREE.Vector3(gauss(),gauss(),gauss()).normalize().multiplyScalar(14+rnd()*16); a.set([d.x,d.y,d.z],i*3); }
+  return a;
+}
+
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(sphere(), 3));
+geo.setAttribute('aA', geo.attributes.position);
+geo.setAttribute('aB', new THREE.BufferAttribute(knot(), 3));
+geo.setAttribute('aC', new THREE.BufferAttribute(galaxy(), 3));
+geo.setAttribute('aD', new THREE.BufferAttribute(await word('ПРИВЕТ'), 3));
+geo.setAttribute('aS', new THREE.BufferAttribute(scatter(), 3));
+const rands = new Float32Array(N); for(let i=0;i<N;i++) rands[i]=rnd();
+geo.setAttribute('aRand', new THREE.BufferAttribute(rands, 1));
+geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 50);
+
+const NOISE = `
+vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1.0/6.0,1.0/3.0); const vec4 D=vec4(0.0,0.5,1.0,2.0);
+  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.0-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
+  i=mod289(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+  float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.0*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
+  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.0-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0; vec4 sh=-step(h,vec4(0.0));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+  vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0); m=m*m;
+  return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+const uniforms = {
+  uP:{value:0}, uTime:{value:0}, uIntro:{value:reduce?1:0},
+  uMouse:{value:new THREE.Vector3(99,99,0)}, uPR:{value:renderer.getPixelRatio()},
+  uSize:{value: mobile ? 34 : 30}
+};
+const mat = new THREE.ShaderMaterial({
+  uniforms, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+  vertexShader: NOISE + `
+  attribute vec3 aA; attribute vec3 aB; attribute vec3 aC; attribute vec3 aD; attribute vec3 aS; attribute float aRand;
+  uniform float uP, uTime, uIntro, uPR, uSize; uniform vec3 uMouse;
+  varying vec3 vCol; varying float vA;
+  void main(){
+    float s = clamp(uP, 0.0, 3.0);
+    float i = min(floor(s), 2.0);
+    float fr = s - i;
+    float f = smoothstep(0.0, 1.0, clamp((fr - aRand*0.35)/0.65, 0.0, 1.0));
+    vec3 a = i < 0.5 ? aA : (i < 1.5 ? aB : aC);
+    vec3 b = i < 0.5 ? aB : (i < 1.5 ? aC : aD);
+    vec3 p = mix(a, b, f);
+    float swirl = sin(f*3.14159);
+    p += swirl * 1.6 * vec3(snoise(p*0.35 + uTime*0.15), snoise(p*0.35 + 17.0 + uTime*0.15), snoise(p*0.35 + 31.0));
+    p += 0.04 * vec3(sin(uTime*1.1 + aRand*40.0), cos(uTime*1.3 + aRand*30.0), sin(uTime*0.7 + aRand*20.0));
+    float intro = smoothstep(0.0, 1.0, clamp((uIntro - aRand*0.4)/0.6, 0.0, 1.0));
+    p = mix(aS, p, intro);
+
+    vec4 wp = modelMatrix * vec4(p, 1.0);
+    vec2 d = wp.xy - uMouse.xy;
+    float dist = length(d);
+    wp.xy += normalize(d + 1e-4) * smoothstep(1.6, 0.0, dist) * 0.9;
+    wp.z += smoothstep(1.6, 0.0, dist) * 0.6;
+    vec4 mv = viewMatrix * wp;
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = uSize * (0.35 + aRand*0.9) * uPR / -mv.z;
+
+    vec3 coral = vec3(1.0, 0.42, 0.35), cyan = vec3(0.35, 0.80, 1.0), violet = vec3(0.62, 0.45, 1.0);
+    vec3 c = mix(coral, cyan, smoothstep(-2.5, 2.5, p.x + p.y*0.6));
+    c = mix(c, violet, smoothstep(0.55, 1.0, aRand) * 0.8);
+    c = mix(c, vec3(1.0), smoothstep(0.6, 0.0, dist) * 0.7 + swirl*0.15);
+    vCol = c;
+    vA = 0.6 + 1.4 * smoothstep(1.6, 0.0, dist);
+  }`,
+  fragmentShader: `
+  varying vec3 vCol; varying float vA;
+  void main(){
+    float d = length(gl_PointCoord - 0.5);
+    if(d > 0.5) discard;
+    float a = pow(1.0 - d*2.0, 1.6);
+    gl_FragColor = vec4(vCol, a * vA * 0.32);
+  }`
+});
+const points = new THREE.Points(geo, mat);
+const group = new THREE.Group(); group.add(points); scene.add(group);
+
+/* фоновые звёзды */
+const sg = new THREE.BufferGeometry(), sp = new Float32Array(1500*3);
+for(let i=0;i<1500;i++){ sp.set([(rnd()-.5)*80,(rnd()-.5)*60,-20-rnd()*30], i*3); }
+sg.setAttribute('position', new THREE.BufferAttribute(sp,3));
+scene.add(new THREE.Points(sg, new THREE.PointsMaterial({color:0x8f8ad0, size:.06, transparent:true, opacity:.6})));
+
+/* ---------- пост-обработка ---------- */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1,1), .7, .5, .12);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+function resize(){
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false); composer.setSize(w, h); bloom.setSize(w, h);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  const fit = Math.min(1, (w/h)/1.25);
+  group.scale.setScalar(.55 + .45*fit);
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- мышь и скролл ---------- */
+const mouse = new THREE.Vector2(9,9), mouseTarget = new THREE.Vector3(99,99,0), ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0,0,1),0);
+let hasMouse = false;
+addEventListener('pointermove', e => {
+  hasMouse = true;
+  mouse.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(mouse, camera); ray.ray.intersectPlane(plane, mouseTarget);
+});
+addEventListener('pointerleave', () => { hasMouse=false; mouseTarget.set(99,99,0); });
+
+let scrollP = 0, smoothP = 0;
+const cur = document.getElementById('cur');
+function onScroll(){
+  const max = document.documentElement.scrollHeight - innerHeight;
+  scrollP = max > 0 ? scrollY/max*3 : 0;
+  cur.textContent = Math.min(4, Math.round(scrollP)+1);
+}
+addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+/* ---------- цикл ---------- */
+const clock = new THREE.Clock();
+function frame(){
+  const dt = Math.min(clock.getDelta(), .25), t = clock.elapsedTime;
+  uniforms.uTime.value = reduce ? 0 : t;
+  if(!reduce) uniforms.uIntro.value = Math.min(1, t/2.4);
+  smoothP += (scrollP - smoothP) * (reduce ? 1 : Math.min(1, dt*3.2));
+  uniforms.uP.value = smoothP;
+  uniforms.uMouse.value.lerp(mouseTarget, Math.min(1, dt*8));
+
+  // поворот: формы крутятся, слово в конце встаёт лицом к зрителю
+  const wordness = THREE.MathUtils.smoothstep(smoothP, 2.4, 3.0);
+  const spinY = reduce ? 0 : t*.12;
+  group.rotation.y = THREE.MathUtils.lerp(spinY + (hasMouse ? mouse.x*.25 : 0), mouse.x*.12*(hasMouse?1:0), wordness);
+  group.rotation.x = THREE.MathUtils.lerp(.35*THREE.MathUtils.smoothstep(smoothP,1.5,2.2) + (hasMouse ? -mouse.y*.15 : 0), 0, wordness);
+  // в первой и третьей секции фигура сдвинута вправо, во второй — влево
+  const side = innerWidth > 700 ? [2.1,-2.0,2.6,0][Math.round(Math.min(3,smoothP))] : 0;
+  group.position.x += (side - group.position.x) * Math.min(1, dt*2);
+  group.position.y += ((innerWidth > 700 ? 1.6*wordness : 1.3*(1-wordness) + 2.2*wordness) - group.position.y) * Math.min(1, dt*2);
+
+  composer.render();
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
